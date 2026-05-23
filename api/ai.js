@@ -10,7 +10,7 @@ export default async function handler(req, res) {
   try {
     // 🔵 處理 Gemini 引擎請求
     if (engine === 'gemini') {
-      const apiKey = process.env.GEMINI_API_KEY; // 安全讀取後端環境變數（無 VITE_ 前綴）
+      const apiKey = process.env.GEMINI_API_KEY; // 安全讀取後端環境變數
       if (!apiKey) return res.status(500).json({ error: { message: "後端伺服器未設定 GEMINI_API_KEY" } });
 
       const payload = {
@@ -20,7 +20,8 @@ export default async function handler(req, res) {
       if (systemInstruction) payload.systemInstruction = { parts: [{ text: systemInstruction }] };
       if (isJson) payload.generationConfig.responseMimeType = "application/json";
 
-      const apiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+      // 已經升級為最新的 2.5-flash 模型
+      const apiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
