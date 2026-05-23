@@ -67,7 +67,7 @@ const App = () => {
     return `你是一個擁有10年經驗的德州撲克職業玩家，你的帳號名稱是 @FlopScience。精通社群經營。你的發文語氣必須是：「${tone}」。請確保用繁體中文輸出。`;
   };
 
-  // 🤖 【微調焦點】核心函數：現在統一向安全的後端伺服器發送請求，前端完全不接觸 API Key
+  // 向安全的後端伺服器發送請求
   const fetchAIContent = async (prompt, systemInstruction = "", isJson = false) => {
     const res = await fetch('/api/ai', {
       method: 'POST',
@@ -361,7 +361,7 @@ Target AI: ${selectedImageModel}. 4k resolution, highly detailed, NO TEXT, NO LE
                   <label className="block text-xs font-bold mb-2 uppercase text-emerald-400 flex items-center gap-1"><Cpu size={14}/> 選擇主要文案生成引擎</label>
                   <select className="w-full bg-slate-900 border border-slate-700 text-slate-200 font-bold rounded-lg text-sm py-2 px-2 outline-none focus:border-emerald-500" value={selectedTextEngine} onChange={(e) => setSelectedTextEngine(e.target.value)}>
                     <option value="chatgpt">🟢 OpenAI ChatGPT (gpt-4o-mini)</option>
-                    <option value="gemini">🔵 Google Gemini (2.0-flash)</option>
+                    <option value="gemini">🔵 Google Gemini (2.5-flash)</option>
                   </select>
                 </div>
 
