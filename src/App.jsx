@@ -13,7 +13,12 @@ const toneOptions = [
   { value: "專業、冷靜、客觀，帶有邏輯分析", label: "🤵 專業冷靜 (預設)" },
   { value: "極度犀利、具攻擊性、直接點出新手錯誤、帶有挑釁意味", label: "🤬 犀利引戰" },
   { value: "充滿學術名詞、GTO、EV期望值、機率計算的口吻", label: "🎓 學術機率" },
-  { value: "地道香港人語氣，大量使用廣東話口語、香港俗語，語氣直接貼地", label: "🇭🇰 港式貼地 (廣東話)" }
+  { value: "充滿幽默感、經常自嘲運氣差或遇到Bad Beat、喜歡用迷因(Meme)梗，語氣輕鬆搞笑", label: "🤡 幽默自嘲 (迷因梗)" },
+  { value: "將德州撲克的概念昇華到人生哲學與創業層面。語氣深沉、充滿智慧與洞察力", label: "💼 投資哲學 (人生如牌)" },
+  { value: "連登討論區巴打語氣，尖酸刻薄、喜歡嘲笑水魚，大量使用潮語（如：CLS、真心膠、炒車、智商稅），充滿黑色幽默", label: "🇭🇰 連登巴打 (毒舌引戰)" },
+  { value: "香港中環金融人語氣，說話中英夾雜(Chinglish)，將撲克與投資概念掛鉤(如Hedging, ROI)，帶有高高在上的精英感", label: "🇭🇰 中環金融才俊 (中英夾雜)" },
+  { value: "地道草根賭徒語氣。喜歡用傳統麻雀或賭博術語（如：食夾棍、捉路、贏谷輸縮），語氣粗獷豪邁", label: "🇭🇰 街坊老雀 (草根江湖)" },
+  { value: "香港YouTuber語氣，極度誇張吸睛。開口閉口都是『喂大佬、大癲、痴線、必睇』，情緒高昂，極力引導留言", label: "🇭🇰 誇張 KOL (流量密碼)" }
 ];
 
 const TABS = [
@@ -36,6 +41,7 @@ const App = () => {
   const [tones, setTones] = useState({});
   const [results, setResults] = useState({});
   const [selectedTextEngine, setSelectedTextEngine] = useState('gemini'); 
+  const [aiTemperature, setAiTemperature] = useState(0.7); // 新增：溫度 State
   
   const [loading, setLoading] = useState({});
   const [ideaLoading, setIdeaLoading] = useState({});
@@ -43,12 +49,10 @@ const App = () => {
   const [editing, setEditing] = useState({});
   const [copied, setCopied] = useState({});
   
-  // 圖片 Prompt 專用 State
   const [imagePrompts, setImagePrompts] = useState({});
   const [imageLoading, setImageLoading] = useState({});
   const [imageErrors, setImageErrors] = useState({});
 
-  // 記錄生成歷史 (用來防重複 + 匯出 CSV)
   const [history, setHistory] = useState([]);
   const [exportMessage, setExportMessage] = useState(null);
 
@@ -73,7 +77,14 @@ const App = () => {
     const res = await fetch('/api/ai', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ engine: selectedTextEngine, prompt, systemInstruction, isJson: false })
+      // 傳送設定好的溫度給後端
+      body: JSON.stringify({ 
+        engine: selectedTextEngine, 
+        prompt, 
+        systemInstruction, 
+        isJson: false,
+        temperature: parseFloat(aiTemperature) 
+      })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error?.message || "後端應答失敗");
@@ -104,7 +115,7 @@ const App = () => {
     setLoading(prev => ({ ...prev, [key]: platform || 'default' }));
     setErrors(prev => ({ ...prev, [key]: null }));
     setEditing(prev => ({ ...prev, [key]: false }));
-    setImagePrompts(prev => ({ ...prev, [key]: null })); // 清空舊圖指令
+    setImagePrompts(prev => ({ ...prev, [key]: null }));
 
     const deduplicationInstruction = getDeduplicationContext();
 
@@ -159,7 +170,6 @@ Meta 描述 (Meta Description)：(包含焦點關鍵字，160字元內)
     setLoading(prev => ({ ...prev, [key]: false }));
   };
 
-  // 生成配圖 Prompt 的功能
   const generateImagePrompt = async () => {
     const key = currentKey;
     const currentText = results[key];
@@ -326,6 +336,28 @@ Target AI: Gemini 3.0 / DALL-E 3. 4k resolution, highly detailed, visually strik
                     <option value="gemini">🔵 Google Gemini (預設 2.5-flash)</option>
                     <option value="chatgpt">🟢 OpenAI ChatGPT (gpt-4o-mini)</option>
                   </select>
+                </div>
+                
+                {/* 溫度拉桿 (Temperature Slider) */}
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                  <label className="block text-xs text-slate-500 font-bold mb-2 uppercase flex justify-between">
+                    <span>🌡️ AI 創意溫度 (Temperature)</span>
+                    <span className="text-emerald-400">{aiTemperature}</span>
+                  </label>
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="1.5"
+                    step="0.1"
+                    value={aiTemperature}
+                    onChange={(e) => setAiTemperature(e.target.value)}
+                    className="w-full accent-emerald-500"
+                  />
+                  <div className="flex justify-between text-[10px] text-slate-500 mt-1 font-bold">
+                    <span>🥶 嚴謹/邏輯 (0.1)</span>
+                    <span>😌 自然平衡 (0.7)</span>
+                    <span>🤪 天馬行空 (1.5)</span>
+                  </div>
                 </div>
 
                 <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
