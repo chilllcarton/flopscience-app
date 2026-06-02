@@ -27,8 +27,8 @@ const TABS = [
   { id: 'schedule', label: '📅 排程貼文' },
   { id: 'custom', label: '💡 自由創作' },
   { id: 'parser', label: '🃏 牌譜解析' },
-  { id: 'wordpress', label: '📝 WP 文章' },
-  { id: 'youtube', label: '▶️ YT 腳本' }
+  { id: 'wordpress', label: '📝 Wordpress 文章' },
+  { id: 'youtube', label: '▶️ Youtube 腳本' }
 ];
 
 const App = () => {
@@ -240,7 +240,7 @@ Meta 描述 (Meta Description)：(包含焦點關鍵字，160字元內)
     try {
       const extractPrompt = `Create a 1-sentence English image prompt for an AI image generator based on this text: "${currentText.substring(0, 500)}".
 Must enforce this aesthetic style: "${inputs.image_style}".
-Target AI: DALL-E 3. 4k resolution, highly detailed, visually striking, NO TEXT, NO LETTERS in the image.`;
+Target AI: Gemini Image 3. 4k resolution, highly detailed, visually striking, NO TEXT, NO LETTERS in the image.`;
       
       const englishPromptText = await fetchAIContent(extractPrompt, "You are an expert AI image prompt engineer. Output ONLY the English prompt.");
       
@@ -258,7 +258,7 @@ Target AI: DALL-E 3. 4k resolution, highly detailed, visually striking, NO TEXT,
       });
       const data = await res.json();
       
-      if (!res.ok) throw new Error(data.error?.message || "DALL-E 3 生成圖片失敗");
+      if (!res.ok) throw new Error(data.error?.message || "Gemini 生成圖片失敗");
       if (data.imageUrl) {
         setGeneratedImages(prev => ({ ...prev, [key]: data.imageUrl }));
       }
@@ -533,7 +533,7 @@ Target AI: DALL-E 3. 4k resolution, highly detailed, visually striking, NO TEXT,
                       </div>
                     )}
                     <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-slate-800">
-                      <button onClick={() => setEditing(prev => ({...prev, [currentKey]: !prev[currentKey]}))} className="text-sm bg-slate-800 px-4 py-2 rounded-lg flex items-center gap-1 hover:bg-slate-700 text-slate-300">
+                      <button onClick={() => setEditing(prev => ({...prev, [currentKey]}))} className="text-sm bg-slate-800 px-4 py-2 rounded-lg flex items-center gap-1 hover:bg-slate-700 text-slate-300">
                         <Pencil size={14}/> {editing[currentKey] ? "完成編輯" : "修改文字"}
                       </button>
                       <button onClick={() => copyText(results[currentKey], currentKey)} className="text-sm bg-emerald-600 hover:bg-emerald-500 px-5 py-2 rounded-lg flex items-center gap-1.5 text-white font-bold">
@@ -548,53 +548,8 @@ Target AI: DALL-E 3. 4k resolution, highly detailed, visually striking, NO TEXT,
                 )}
               </div>
 
+              {/* 🎨 圖片展示區塊 */}
               {(imageLoading[currentKey] || generatedImages[currentKey] || imageErrors[currentKey]) && (
                 <div className="mt-4 bg-slate-950 border border-slate-800 rounded-xl p-4 flex flex-col justify-center relative min-h-[150px] animate-fade-in">
                   {imageLoading[currentKey] ? (
-                      <div className="flex flex-col items-center justify-center text-slate-500 animate-pulse h-full py-6">
-                        <ImageIcon className="w-8 h-8 mb-3 opacity-50" />
-                        <span className="font-bold text-indigo-400">正在連接 DALL-E 3 繪製圖片...</span>
-                        <span className="text-xs mt-1">需時約 10-15 秒，請耐心等候</span>
-                      </div>
-                  ) : imageErrors[currentKey] ? (
-                    <div className="text-red-400 flex items-center gap-2 text-sm bg-red-950/20 px-3 py-2 rounded-lg border border-red-900/50"><CircleAlert size={16}/>{imageErrors[currentKey]}</div>
-                  ) : generatedImages[currentKey] ? (
-                    <div className="w-full flex flex-col items-center">
-                      <div className="flex justify-between items-center w-full mb-3">
-                        <span className="text-sm font-bold text-indigo-400 flex items-center gap-1"><Sparkles size={16}/> DALL-E 3 生成完成</span>
-                        <a href={generatedImages[currentKey]} target="_blank" rel="noreferrer" className="text-xs flex items-center gap-1 bg-slate-800 text-slate-300 px-3 py-1.5 rounded-lg hover:bg-slate-700 border border-slate-600 transition-colors">
-                          <ExternalLink size={12}/> 打開原圖 (右鍵儲存)
-                        </a>
-                      </div>
-                      
-                      <div className="relative group w-full max-w-[400px] aspect-square rounded-xl overflow-hidden border-2 border-slate-800 shadow-2xl">
-                        <img src={generatedImages[currentKey]} alt="AI Generated" className="w-full h-full object-cover" />
-                      </div>
-                      
-                      {imagePrompts[currentKey] && (
-                        <div className="mt-4 w-full p-3 bg-slate-900 border border-slate-700 rounded-lg text-[10px] md:text-xs text-slate-500 font-mono leading-relaxed">
-                          <span className="font-bold text-slate-400 block mb-1">使用的生圖指令 (Prompt):</span>
-                          {imagePrompts[currentKey]}
-                        </div>
-                      )}
-                    </div>
-                  ) : null}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <style dangerouslySetInnerHTML={{__html: `
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #334155; border-radius: 20px; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
-      `}} />
-    </div>
-  );
-};
-
-export default App;
+                      <div className="flex flex-col items-center justify-center
