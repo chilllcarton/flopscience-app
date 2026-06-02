@@ -238,9 +238,10 @@ Meta 描述 (Meta Description)：(包含焦點關鍵字，160字元內)
     setGeneratedImages(prev => ({ ...prev, [key]: null }));
 
     try {
+      // 確保要求 AI 產生適合 DALL-E 3 嘅 Prompt
       const extractPrompt = `Create a 1-sentence English image prompt for an AI image generator based on this text: "${currentText.substring(0, 500)}".
 Must enforce this aesthetic style: "${inputs.image_style}".
-Target AI: Gemini Image 3. 4k resolution, highly detailed, visually striking, NO TEXT, NO LETTERS in the image.`;
+Target AI: DALL-E 3. 4k resolution, highly detailed, visually striking, NO TEXT, NO LETTERS in the image.`;
       
       const englishPromptText = await fetchAIContent(extractPrompt, "You are an expert AI image prompt engineer. Output ONLY the English prompt.");
       
@@ -258,7 +259,7 @@ Target AI: Gemini Image 3. 4k resolution, highly detailed, visually striking, NO
       });
       const data = await res.json();
       
-      if (!res.ok) throw new Error(data.error?.message || "Gemini 生成圖片失敗");
+      if (!res.ok) throw new Error(data.error?.message || "生圖伺服器發生錯誤");
       if (data.imageUrl) {
         setGeneratedImages(prev => ({ ...prev, [key]: data.imageUrl }));
       }
@@ -554,7 +555,7 @@ Target AI: Gemini Image 3. 4k resolution, highly detailed, visually striking, NO
                   {imageLoading[currentKey] ? (
                       <div className="flex flex-col items-center justify-center text-slate-500 animate-pulse h-full py-6">
                         <ImageIcon className="w-8 h-8 mb-3 opacity-50" />
-                        <span className="font-bold text-indigo-400">正在連接 Gemini Image 3.0 繪製圖片...</span>
+                        <span className="font-bold text-indigo-400">正在連接 DALL-E 3 繪製圖片...</span>
                         <span className="text-xs mt-1">需時約 10-15 秒，請耐心等候</span>
                       </div>
                   ) : imageErrors[currentKey] ? (
@@ -562,9 +563,9 @@ Target AI: Gemini Image 3. 4k resolution, highly detailed, visually striking, NO
                   ) : generatedImages[currentKey] ? (
                     <div className="w-full flex flex-col items-center">
                       <div className="flex justify-between items-center w-full mb-3">
-                        <span className="text-sm font-bold text-indigo-400 flex items-center gap-1"><Sparkles size={16}/> Gemini Image 3.0 生成完成</span>
-                        <a href={generatedImages[currentKey]} download="FlopScience_Image.png" className="text-xs flex items-center gap-1 bg-slate-800 text-slate-300 px-3 py-1.5 rounded-lg hover:bg-slate-700 border border-slate-600 transition-colors">
-                          <Download size={12}/> 下載圖片
+                        <span className="text-sm font-bold text-indigo-400 flex items-center gap-1"><Sparkles size={16}/> 圖片生成完成</span>
+                        <a href={generatedImages[currentKey]} target="_blank" rel="noreferrer" className="text-xs flex items-center gap-1 bg-slate-800 text-slate-300 px-3 py-1.5 rounded-lg hover:bg-slate-700 border border-slate-600 transition-colors">
+                          <ExternalLink size={12}/> 打開原圖 (右鍵儲存)
                         </a>
                       </div>
                       

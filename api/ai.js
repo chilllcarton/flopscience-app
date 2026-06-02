@@ -1,4 +1,4 @@
-// api/ai.js - Vercel Serverless 後端安全通道
+// api/ai.js - Vercel Serverless 後端安全通道 (混合架構版)
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: { message: "Method Not Allowed" } });
@@ -7,35 +7,30 @@ export default async function handler(req, res) {
   const { engine, prompt, systemInstruction, isJson, temperature, isImage } = req.body;
 
   try {
-    // 🎨 改為 Gemini Imagen 3 生成圖片邏輯
+    // 🎨 生圖專區：使用極穩定的 OpenAI DALL-E 3
     if (isImage) {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) return res.status(500).json({ error: { message: "後端未設定 GEMINI_API_KEY" } });
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey) return res.status(500).json({ error: { message: "後端未設定 OPENAI_API_KEY" } });
 
-      // 呼叫 Google Imagen 3 模型
-      const apiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${apiKey}`, {
+      const apiRes = await fetch('https://api.openai.com/v1/images/generations', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
         body: JSON.stringify({
-          instances: [{ prompt: prompt }],
-          parameters: {
-            sampleCount: 1,
-            aspectRatio: "1:1" // 生成 1:1 正方形圖片，適合 IG
-          }
+          model: "dall-e-3",
+          prompt: prompt,
+          n: 1,
+          size: "1024x1024",
+          quality: "standard"
         })
       });
 
       const data = await apiRes.json();
-      if (!apiRes.ok) throw new Error(data.error?.message || "Gemini 生圖伺服器出錯");
+      if (!apiRes.ok) throw new Error(data.error?.message || "DALL-E 3 繪圖伺服器出錯");
 
-      // Gemini 回傳的是 Base64 編碼，我們需要將它包裝成 Data URL 讓前端直接顯示
-      const base64Data = data.predictions?.[0]?.bytesBase64Encoded;
-      if (!base64Data) throw new Error("API 未返回圖片數據，可能是 Prompt 觸發了安全審查");
-
-      return res.status(200).json({ imageUrl: `data:image/png;base64,${base64Data}` });
+      return res.status(200).json({ imageUrl: data.data[0].url });
     }
 
-    // 📝 以下為原有的文字生成邏輯
+    // 📝 文字專區：支援 Gemini 2.5 Pro / Flash 及 ChatGPT
     const tempValue = temperature !== undefined ? parseFloat(temperature) : 0.7;
 
     if (engine === 'gemini-pro' || engine === 'gemini-flash' || engine === 'gemini') {
