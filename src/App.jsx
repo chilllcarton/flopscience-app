@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Copy, RefreshCw, CircleCheck, CircleAlert, Pencil, User, Sparkles, Download, LayoutTemplate, Lightbulb, Cpu, FileText, Image as ImageIcon, Filter } from 'lucide-react';
+import { Copy, RefreshCw, CircleCheck, CircleAlert, Pencil, User, Sparkles, Download, LayoutTemplate, Lightbulb, Cpu, FileText, Image as ImageIcon, Filter, ExternalLink } from 'lucide-react';
 
 const scheduleData = [
   { id: 1, time: "09:00", topic: "晨間心態 / 金句", prompt: "你是一個擁有10年經驗的德州撲克玩家，帳號是 @FlopScience。請寫一句約20-40字的極短Threads貼文。主題：德州撲克風險管理與人生哲學的結合。要求：金句形式，結尾帶1個emoji，文末加上『—— @FlopScience』。" },
@@ -27,8 +27,8 @@ const TABS = [
   { id: 'schedule', label: '📅 排程貼文' },
   { id: 'custom', label: '💡 自由創作' },
   { id: 'parser', label: '🃏 牌譜解析' },
-  { id: 'wordpress', label: '📝 Wordpress 文章' },
-  { id: 'youtube', label: '▶️ Youtube 腳本' }
+  { id: 'wordpress', label: '📝 WP 文章' },
+  { id: 'youtube', label: '▶️ YT 腳本' }
 ];
 
 const App = () => {
@@ -44,7 +44,7 @@ const App = () => {
   
   const [tones, setTones] = useState({});
   const [results, setResults] = useState({});
-  const [selectedTextEngine, setSelectedTextEngine] = useState('gemini'); 
+  const [selectedTextEngine, setSelectedTextEngine] = useState('gemini-pro'); 
   const [aiTemperature, setAiTemperature] = useState(0.7); 
   
   const [loading, setLoading] = useState({});
@@ -55,6 +55,7 @@ const App = () => {
   const [copied, setCopied] = useState({});
   
   const [imagePrompts, setImagePrompts] = useState({});
+  const [generatedImages, setGeneratedImages] = useState({}); 
   const [imageLoading, setImageLoading] = useState({});
   const [imageErrors, setImageErrors] = useState({});
 
@@ -155,6 +156,7 @@ ${inputs.raw_hand}`;
     setErrors(prev => ({ ...prev, [key]: null }));
     setEditing(prev => ({ ...prev, [key]: false }));
     setImagePrompts(prev => ({ ...prev, [key]: null }));
+    setGeneratedImages(prev => ({ ...prev, [key]: null }));
 
     const deduplicationInstruction = getDeduplicationContext();
 
@@ -212,7 +214,7 @@ Meta 描述 (Meta Description)：(包含焦點關鍵字，160字元內)
         setResults(prev => ({ ...prev, [key]: finalText }));
         setHistory(prev => [...prev, {
           date: new Date().toLocaleString('zh-TW', { hour12: false }),
-          engine: selectedTextEngine === 'gemini' ? 'Gemini 2.5' : 'ChatGPT',
+          engine: selectedTextEngine.includes('gemini') ? 'Gemini 2.5' : 'ChatGPT',
           category: TABS.find(t => t.id === activeTab).label,
           platform: platform || activeTab,
           inputData: currentInputData,
@@ -225,7 +227,7 @@ Meta 描述 (Meta Description)：(包含焦點關鍵字，160字元內)
     setLoading(prev => ({ ...prev, [key]: false }));
   };
 
-  const generateImagePrompt = async () => {
+  const generateDirectImage = async () => {
     const key = currentKey;
     const currentText = results[key];
     if (!currentText) return;
@@ -233,14 +235,33 @@ Meta 描述 (Meta Description)：(包含焦點關鍵字，160字元內)
     setImageLoading(prev => ({ ...prev, [key]: true }));
     setImageErrors(prev => ({ ...prev, [key]: null }));
     setImagePrompts(prev => ({ ...prev, [key]: null }));
+    setGeneratedImages(prev => ({ ...prev, [key]: null }));
 
     try {
       const extractPrompt = `Create a 1-sentence English image prompt for an AI image generator based on this text: "${currentText.substring(0, 500)}".
 Must enforce this aesthetic style: "${inputs.image_style}".
-Target AI: Gemini 3.0 / DALL-E 3. 4k resolution, highly detailed, visually striking, NO TEXT, NO LETTERS in the image.`;
+Target AI: DALL-E 3. 4k resolution, highly detailed, visually striking, NO TEXT, NO LETTERS in the image.`;
       
-      const text = await fetchAIContent(extractPrompt, "You are an expert AI image prompt engineer. Output ONLY the English prompt.");
-      if (text) setImagePrompts(prev => ({ ...prev, [key]: text.trim() }));
+      const englishPromptText = await fetchAIContent(extractPrompt, "You are an expert AI image prompt engineer. Output ONLY the English prompt.");
+      
+      if (!englishPromptText) throw new Error("未能成功萃取生圖指令");
+      const finalImagePrompt = englishPromptText.trim();
+      setImagePrompts(prev => ({ ...prev, [key]: finalImagePrompt }));
+
+      const res = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          prompt: finalImagePrompt,
+          isImage: true 
+        })
+      });
+      const data = await res.json();
+      
+      if (!res.ok) throw new Error(data.error?.message || "DALL-E 3 生成圖片失敗");
+      if (data.imageUrl) {
+        setGeneratedImages(prev => ({ ...prev, [key]: data.imageUrl }));
+      }
     } catch (err) {
       setImageErrors(prev => ({ ...prev, [key]: err.message }));
     }
@@ -409,7 +430,8 @@ Target AI: Gemini 3.0 / DALL-E 3. 4k resolution, highly detailed, visually strik
                   <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
                   <label className="block text-xs font-bold mb-2 uppercase text-emerald-400 flex items-center gap-1"><Cpu size={14}/> 選擇主要文案生成引擎</label>
                   <select className="w-full bg-slate-900 border border-slate-700 text-slate-200 font-bold rounded-lg text-sm py-2 px-2 outline-none focus:border-emerald-500" value={selectedTextEngine} onChange={(e) => setSelectedTextEngine(e.target.value)}>
-                    <option value="gemini">🔵 Google Gemini (預設 2.5-flash)</option>
+                    <option value="gemini-pro">🧠 Google Gemini (最強 2.5-Pro)</option>
+                    <option value="gemini-flash">⚡ Google Gemini (極速 2.5-Flash)</option>
                     <option value="chatgpt">🟢 OpenAI ChatGPT (gpt-4o-mini)</option>
                   </select>
                 </div>
@@ -443,7 +465,7 @@ Target AI: Gemini 3.0 / DALL-E 3. 4k resolution, highly detailed, visually strik
                 </div>
 
                 <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                  <label className="block text-xs text-slate-500 font-bold mb-2 uppercase">配圖視覺風格 (供生圖 Prompt 用)</label>
+                  <label className="block text-xs text-slate-500 font-bold mb-2 uppercase">配圖視覺風格 (供生圖使用)</label>
                   <select className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-lg text-sm py-2 px-2 outline-none focus:border-emerald-500" value={inputs.image_style} onChange={(e) => handleInputChange('image_style', e.target.value)}>
                     <option value="Cyberpunk aesthetic, glowing neon emerald green, scientific elements, dark slate background, highly detailed">🟢 品牌專屬 (科幻霓虹綠)</option>
                     <option value="Photorealistic macro photography, close-up of stacks of professional casino poker chips and vintage distressed playing cards on a classic green felt table. Dramatic moody studio lighting, sharp focus on foreground, shallow depth of field, cinematic blurred background bokeh, 8k resolution, highly detailed">📸 寫實微距 (復古紙牌與籌碼)</option>
@@ -485,9 +507,9 @@ Target AI: Gemini 3.0 / DALL-E 3. 4k resolution, highly detailed, visually strik
                   生成結果預覽
                 </div>
                 {results[currentKey] && (
-                  <button onClick={() => generateImagePrompt()} disabled={imageLoading[currentKey]} className="text-xs bg-slate-800 text-slate-300 border border-slate-700 px-3 py-1.5 rounded-lg flex items-center gap-1 hover:bg-slate-700 transition-colors shadow-sm">
-                    {imageLoading[currentKey] ? <RefreshCw size={12} className="animate-spin"/> : <ImageIcon size={12}/>}
-                    萃取英文配圖 Prompt
+                  <button onClick={generateDirectImage} disabled={imageLoading[currentKey]} className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-lg transition-all active:scale-95 font-bold">
+                    {imageLoading[currentKey] ? <RefreshCw size={14} className="animate-spin"/> : <ImageIcon size={14}/>}
+                    🎨 直接生成 AI 配圖
                   </button>
                 )}
               </div>
@@ -526,23 +548,35 @@ Target AI: Gemini 3.0 / DALL-E 3. 4k resolution, highly detailed, visually strik
                 )}
               </div>
 
-              {(imageLoading[currentKey] || imagePrompts[currentKey] || imageErrors[currentKey]) && (
-                <div className="mt-4 bg-slate-950 border border-slate-800 rounded-xl p-4 flex flex-col justify-center relative min-h-[100px] animate-fade-in">
+              {(imageLoading[currentKey] || generatedImages[currentKey] || imageErrors[currentKey]) && (
+                <div className="mt-4 bg-slate-950 border border-slate-800 rounded-xl p-4 flex flex-col justify-center relative min-h-[150px] animate-fade-in">
                   {imageLoading[currentKey] ? (
-                      <div className="flex flex-col items-center justify-center text-slate-500 animate-pulse h-full py-4"><Sparkles className="w-6 h-6 mb-2 opacity-50" /><span>AI 正在濃縮文章並翻譯為英文提詞...</span></div>
+                      <div className="flex flex-col items-center justify-center text-slate-500 animate-pulse h-full py-6">
+                        <ImageIcon className="w-8 h-8 mb-3 opacity-50" />
+                        <span className="font-bold text-indigo-400">正在連接 DALL-E 3 繪製圖片...</span>
+                        <span className="text-xs mt-1">需時約 10-15 秒，請耐心等候</span>
+                      </div>
                   ) : imageErrors[currentKey] ? (
                     <div className="text-red-400 flex items-center gap-2 text-sm bg-red-950/20 px-3 py-2 rounded-lg border border-red-900/50"><CircleAlert size={16}/>{imageErrors[currentKey]}</div>
-                  ) : imagePrompts[currentKey] ? (
-                    <div className="w-full">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm font-bold text-emerald-400 flex items-center gap-1"><ImageIcon size={16}/> 專屬英文繪圖指令 (請複製至 AI 繪圖工具)</span>
-                        <button onClick={() => copyText(imagePrompts[currentKey])} className="text-xs flex items-center gap-1 bg-slate-800 text-slate-300 px-3 py-1.5 rounded-lg hover:bg-slate-700 border border-slate-600">
-                          <Copy size={12}/> 複製指令
-                        </button>
+                  ) : generatedImages[currentKey] ? (
+                    <div className="w-full flex flex-col items-center">
+                      <div className="flex justify-between items-center w-full mb-3">
+                        <span className="text-sm font-bold text-indigo-400 flex items-center gap-1"><Sparkles size={16}/> DALL-E 3 生成完成</span>
+                        <a href={generatedImages[currentKey]} target="_blank" rel="noreferrer" className="text-xs flex items-center gap-1 bg-slate-800 text-slate-300 px-3 py-1.5 rounded-lg hover:bg-slate-700 border border-slate-600 transition-colors">
+                          <ExternalLink size={12}/> 打開原圖 (右鍵儲存)
+                        </a>
                       </div>
-                      <div className="p-3 bg-slate-900 border border-slate-700 rounded-lg text-xs md:text-sm text-emerald-300 font-mono leading-relaxed select-all">
-                        {imagePrompts[currentKey]}
+                      
+                      <div className="relative group w-full max-w-[400px] aspect-square rounded-xl overflow-hidden border-2 border-slate-800 shadow-2xl">
+                        <img src={generatedImages[currentKey]} alt="AI Generated" className="w-full h-full object-cover" />
                       </div>
+                      
+                      {imagePrompts[currentKey] && (
+                        <div className="mt-4 w-full p-3 bg-slate-900 border border-slate-700 rounded-lg text-[10px] md:text-xs text-slate-500 font-mono leading-relaxed">
+                          <span className="font-bold text-slate-400 block mb-1">使用的生圖指令 (Prompt):</span>
+                          {imagePrompts[currentKey]}
+                        </div>
+                      )}
                     </div>
                   ) : null}
                 </div>
