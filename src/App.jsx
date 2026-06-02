@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Copy, RefreshCw, CircleCheck, CircleAlert, Pencil, User, Sparkles, Download, LayoutTemplate, Video, Lightbulb, Cpu, FileText } from 'lucide-react';
+import { Copy, RefreshCw, CircleCheck, CircleAlert, Pencil, User, Sparkles, Download, LayoutTemplate, Lightbulb, Cpu, FileText, Image as ImageIcon } from 'lucide-react';
 
 const scheduleData = [
   { id: 1, time: "09:00", topic: "晨間心態 / 金句", prompt: "你是一個擁有10年經驗的德州撲克玩家，帳號是 @FlopScience。請寫一句約20-40字的極短Threads貼文。主題：德州撲克風險管理與人生哲學的結合。要求：金句形式，結尾帶1個emoji，文末加上『—— @FlopScience』。" },
@@ -30,6 +30,7 @@ const App = () => {
   const [inputs, setInputs] = useState({
     custom: '', yt_topic: '', wp_topic: '',
     yt_length: '3-5分鐘 (中等長度，知識科普)',
+    image_style: 'Cyberpunk aesthetic, glowing neon emerald green, scientific elements, dark slate background, highly detailed'
   });
   
   const [tones, setTones] = useState({});
@@ -42,6 +43,11 @@ const App = () => {
   const [editing, setEditing] = useState({});
   const [copied, setCopied] = useState({});
   
+  // 圖片 Prompt 專用 State
+  const [imagePrompts, setImagePrompts] = useState({});
+  const [imageLoading, setImageLoading] = useState({});
+  const [imageErrors, setImageErrors] = useState({});
+
   // 記錄生成歷史 (用來防重複 + 匯出 CSV)
   const [history, setHistory] = useState([]);
   const [exportMessage, setExportMessage] = useState(null);
@@ -57,10 +63,8 @@ const App = () => {
     return `你是一個擁有10年經驗的德州撲克職業玩家與媒體營運專家，帳號名稱是 @FlopScience。你的發文語氣必須是：「${tone}」。請確保用繁體中文輸出。`;
   };
 
-  // 生成「防重複」上下文指令
   const getDeduplicationContext = () => {
     if (history.length === 0) return "";
-    // 抽取最近 5 篇生成的結果作為對比
     const recentOutputs = history.slice(-5).map((h, i) => `舊文${i+1}摘要：${h.result.substring(0, 100)}...`).join('\n');
     return `\n\n【⚠️ 極度重要：防重複機制 ⚠️】\n請先檢查以下我們最近已生成的貼文/文章摘要：\n${recentOutputs}\n\n👉 這次產出的全新內容，其「主題切入點」、「故事背景」及「核心用詞」絕對不可以與上述舊文重複！請給我一個完全不同的新角度！`;
   };
@@ -69,14 +73,8 @@ const App = () => {
     const res = await fetch('/api/ai', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        engine: selectedTextEngine,
-        prompt,
-        systemInstruction,
-        isJson: false
-      })
+      body: JSON.stringify({ engine: selectedTextEngine, prompt, systemInstruction, isJson: false })
     });
-    
     const data = await res.json();
     if (!res.ok) throw new Error(data.error?.message || "後端應答失敗");
     return data.text;
@@ -85,7 +83,7 @@ const App = () => {
   const generateIdea = async (field) => {
     setIdeaLoading(prev => ({ ...prev, [field]: true }));
     let promptText = "";
-    if (field === 'wp_topic') promptText = "幫我想一個適合寫成長篇 SEO 文章的德州撲克主題（例如：資金管理、GTO新手指南、澳門打牌攻略）。只輸出『一句話標題』。";
+    if (field === 'wp_topic') promptText = "幫我想一個適合寫成長篇 SEO 文章的德州撲克主題（例如：資金管理、GTO新手指南）。只輸出『一句話標題』。";
     else if (field === 'custom') promptText = "請給我一個適合在 Threads 或 IG 引起德州撲克玩家激烈討論的爭議性話題或進階心法。只輸出『一句話』，不要引號。";
 
     try {
@@ -106,19 +104,17 @@ const App = () => {
     setLoading(prev => ({ ...prev, [key]: platform || 'default' }));
     setErrors(prev => ({ ...prev, [key]: null }));
     setEditing(prev => ({ ...prev, [key]: false }));
+    setImagePrompts(prev => ({ ...prev, [key]: null })); // 清空舊圖指令
 
-    // 防重複機制 Context
     const deduplicationInstruction = getDeduplicationContext();
 
     if (activeTab === 'schedule') {
       const schedule = scheduleData.find(s => s.id === activeScheduleId);
       currentInputData = schedule.topic;
-      // IG 限定 5 個 Hashtag
       prompt = platform === 'ig' ? `${schedule.prompt}\n\n【擴寫為 Instagram 長文文案。包含豐富細節、良好排版、Emoji，以及嚴格限制剛好 5 個 IG 撲克熱門 Hashtags。】` : schedule.prompt;
     } else if (activeTab === 'custom') {
       if (!inputs.custom.trim()) return setErrors(prev => ({ ...prev, [key]: "請輸入主題" })), setLoading(prev => ({ ...prev, [key]: false }));
       currentInputData = inputs.custom;
-      // IG 限定 5 個 Hashtag
       prompt = platform === 'ig' ? `針對主題「${inputs.custom}」寫一篇IG長文。包含良好排版，以及嚴格限制剛好 5 個 IG 撲克熱門 Hashtags。` : `針對主題「${inputs.custom}」寫一篇 Threads 短文，文末加上 —— @FlopScience`;
     } else if (activeTab === 'wordpress') {
       if (!inputs.wp_topic.trim()) return setErrors(prev => ({ ...prev, [key]: "請輸入 WordPress 文章主題" })), setLoading(prev => ({ ...prev, [key]: false }));
@@ -141,7 +137,6 @@ Meta 描述 (Meta Description)：(包含焦點關鍵字，160字元內)
       prompt = `以「${inputs.yt_topic}」為主題寫一份 YouTube 影片腳本。長度：「${inputs.yt_length}」。包含 3 個吸睛標題、時間軸與畫面分鏡、逐字稿旁白。\n語氣：「${tone}」。`;
     }
 
-    // 將防撞橋指令加入最終 Prompt
     const finalPrompt = prompt + deduplicationInstruction;
 
     try {
@@ -149,8 +144,6 @@ Meta 描述 (Meta Description)：(包含焦點關鍵字，160字元內)
       if (text) {
         const finalText = text.trim();
         setResults(prev => ({ ...prev, [key]: finalText }));
-        
-        // 寫入歷史紀錄
         setHistory(prev => [...prev, {
           date: new Date().toLocaleString('zh-TW', { hour12: false }),
           engine: selectedTextEngine === 'gemini' ? 'Gemini 2.5' : 'ChatGPT',
@@ -164,6 +157,29 @@ Meta 描述 (Meta Description)：(包含焦點關鍵字，160字元內)
       setErrors(prev => ({ ...prev, [key]: err.message }));
     }
     setLoading(prev => ({ ...prev, [key]: false }));
+  };
+
+  // 生成配圖 Prompt 的功能
+  const generateImagePrompt = async () => {
+    const key = currentKey;
+    const currentText = results[key];
+    if (!currentText) return;
+
+    setImageLoading(prev => ({ ...prev, [key]: true }));
+    setImageErrors(prev => ({ ...prev, [key]: null }));
+    setImagePrompts(prev => ({ ...prev, [key]: null }));
+
+    try {
+      const extractPrompt = `Create a 1-sentence English image prompt for an AI image generator based on this text: "${currentText.substring(0, 500)}".
+Must enforce this aesthetic style: "${inputs.image_style}".
+Target AI: Gemini 3.0 / DALL-E 3. 4k resolution, highly detailed, visually striking, NO TEXT, NO LETTERS in the image.`;
+      
+      const text = await fetchAIContent(extractPrompt, "You are an expert AI image prompt engineer. Output ONLY the English prompt.");
+      if (text) setImagePrompts(prev => ({ ...prev, [key]: text.trim() }));
+    } catch (err) {
+      setImageErrors(prev => ({ ...prev, [key]: err.message }));
+    }
+    setImageLoading(prev => ({ ...prev, [key]: false }));
   };
 
   const copyText = (text, key) => {
@@ -180,11 +196,10 @@ Meta 描述 (Meta Description)：(包含焦點關鍵字，160字元內)
       setTimeout(() => setExportMessage(null), 3000);
       return;
     }
-    let csvContent = '\uFEFF日期,使用引擎,文章分類,目標平台,輸入主題/資料,防重複檢查,生成內容\n';
+    let csvContent = '\uFEFF日期,使用引擎,文章分類,目標平台,輸入主題,防重複檢查,生成內容\n';
     const escapeCSV = (str) => str ? `"${str.toString().replace(/"/g, '""')}"` : '""';
 
     history.forEach(item => {
-      // 在 CSV 中標記是否有經過防重複檢查 (第二篇開始都有)
       const dedupeStatus = history.length > 1 ? "已執行防重複檢查" : "首篇無歷史";
       csvContent += `${escapeCSV(item.date)},${escapeCSV(item.engine)},${escapeCSV(item.category)},${escapeCSV(item.platform)},${escapeCSV(item.inputData)},${escapeCSV(dedupeStatus)},${escapeCSV(item.result)}\n`;
     });
@@ -280,7 +295,7 @@ Meta 描述 (Meta Description)：(包含焦點關鍵字，160字元內)
                       {ideaLoading['wp_topic'] ? <RefreshCw size={12} className="animate-spin" /> : <Lightbulb size={12} />} 產出 SEO 主題
                     </button>
                   </div>
-                  <textarea className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl min-h-[120px] resize-y text-sm focus:border-emerald-500 outline-none placeholder-slate-600" placeholder="輸入文章核心主題，AI 將自動生成 Rank Math SEO 設定 (標題、描述、焦點關鍵字) 及長篇文章..." value={inputs.wp_topic} onChange={(e) => handleInputChange('wp_topic', e.target.value)} />
+                  <textarea className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl min-h-[120px] resize-y text-sm focus:border-emerald-500 outline-none placeholder-slate-600" placeholder="輸入文章核心主題，AI 將自動生成 Rank Math SEO 設定..." value={inputs.wp_topic} onChange={(e) => handleInputChange('wp_topic', e.target.value)} />
                 </div>
               )}
 
@@ -319,6 +334,15 @@ Meta 描述 (Meta Description)：(包含焦點關鍵字，160字元內)
                     {toneOptions.map(o => <option key={o.label} value={o.value}>{o.label}</option>)}
                   </select>
                 </div>
+
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                  <label className="block text-xs text-slate-500 font-bold mb-2 uppercase">配圖視覺風格 (供生圖 Prompt 用)</label>
+                  <select className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-lg text-sm py-2 px-2 outline-none focus:border-emerald-500" value={inputs.image_style} onChange={(e) => handleInputChange('image_style', e.target.value)}>
+                    <option value="Cyberpunk aesthetic, glowing neon emerald green, scientific elements, dark slate background, highly detailed">🟢 品牌專屬 (科幻霓虹綠)</option>
+                    <option value="Cinematic photography, dark moody classic casino atmosphere, professional lighting, photorealistic">♠️ 經典實體賭場 (暗沉電影)</option>
+                    <option value="Minimalist 3D render, clean, bright, focused on data, statistics, and poker elements">📊 極簡 3D 渲染 (明亮數據)</option>
+                  </select>
+                </div>
               </div>
 
               <div className="flex flex-col gap-3 mt-auto pt-4">
@@ -348,6 +372,12 @@ Meta 描述 (Meta Description)：(包含焦點關鍵字，160字元內)
                   <Sparkles className="w-5 h-5 text-emerald-500" />
                   生成結果預覽
                 </div>
+                {results[currentKey] && (
+                  <button onClick={() => generateImagePrompt()} disabled={imageLoading[currentKey]} className="text-xs bg-slate-800 text-slate-300 border border-slate-700 px-3 py-1.5 rounded-lg flex items-center gap-1 hover:bg-slate-700 transition-colors shadow-sm">
+                    {imageLoading[currentKey] ? <RefreshCw size={12} className="animate-spin"/> : <ImageIcon size={12}/>}
+                    萃取英文配圖 Prompt
+                  </button>
+                )}
               </div>
 
               <div className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-5 relative flex flex-col min-h-[300px]">
@@ -362,10 +392,10 @@ Meta 描述 (Meta Description)：(包含焦點關鍵字，160字元內)
                 ) : results[currentKey] ? (
                   <>
                     {editing[currentKey] ? (
-                      <textarea className="flex-1 w-full bg-slate-900 text-slate-200 p-4 rounded-lg border border-emerald-500 outline-none resize-y text-sm md:text-base leading-relaxed min-h-[400px] max-h-[600px] overflow-y-auto" value={results[currentKey]} onChange={(e) => setResults(prev => ({...prev, [currentKey]: e.target.value}))} />
+                      <textarea className="flex-1 w-full bg-slate-900 text-slate-200 p-4 rounded-lg border border-emerald-500 outline-none resize-y text-sm md:text-base leading-relaxed min-h-[350px] max-h-[500px] overflow-y-auto" value={results[currentKey]} onChange={(e) => setResults(prev => ({...prev, [currentKey]: e.target.value}))} />
                     ) : (
                       <div className="flex-1 flex flex-col justify-between">
-                        <div className="flex-1 text-slate-200 whitespace-pre-wrap text-sm md:text-base leading-relaxed font-medium overflow-y-auto max-h-[600px] pr-3 custom-scrollbar">{results[currentKey]}</div>
+                        <div className="flex-1 text-slate-200 whitespace-pre-wrap text-sm md:text-base leading-relaxed font-medium overflow-y-auto max-h-[500px] pr-3 custom-scrollbar">{results[currentKey]}</div>
                       </div>
                     )}
                     <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-slate-800">
@@ -383,16 +413,40 @@ Meta 描述 (Meta Description)：(包含焦點關鍵字，160字元內)
                   </div>
                 )}
               </div>
+
+              {/* 顯示配圖 Prompt 區塊 */}
+              {(imageLoading[currentKey] || imagePrompts[currentKey] || imageErrors[currentKey]) && (
+                <div className="mt-4 bg-slate-950 border border-slate-800 rounded-xl p-4 flex flex-col justify-center relative min-h-[100px] animate-fade-in">
+                  {imageLoading[currentKey] ? (
+                      <div className="flex flex-col items-center justify-center text-slate-500 animate-pulse h-full py-4"><Sparkles className="w-6 h-6 mb-2 opacity-50" /><span>AI 正在濃縮文章並翻譯為英文提詞...</span></div>
+                  ) : imageErrors[currentKey] ? (
+                    <div className="text-red-400 flex items-center gap-2 text-sm bg-red-950/20 px-3 py-2 rounded-lg border border-red-900/50"><CircleAlert size={16}/>{imageErrors[currentKey]}</div>
+                  ) : imagePrompts[currentKey] ? (
+                    <div className="w-full">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-bold text-emerald-400 flex items-center gap-1"><ImageIcon size={16}/> 專屬英文繪圖指令 (請複製至 AI 繪圖工具)</span>
+                        <button onClick={() => copyText(imagePrompts[currentKey])} className="text-xs flex items-center gap-1 bg-slate-800 text-slate-300 px-3 py-1.5 rounded-lg hover:bg-slate-700 border border-slate-600">
+                          <Copy size={12}/> 複製指令
+                        </button>
+                      </div>
+                      <div className="p-3 bg-slate-900 border border-slate-700 rounded-lg text-xs md:text-sm text-emerald-300 font-mono leading-relaxed select-all">
+                        {imagePrompts[currentKey]}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              )}
             </div>
           </div>
         </div>
-
       </div>
 
       <style dangerouslySetInnerHTML={{__html: `
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #334155; border-radius: 20px; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
       `}} />
     </div>
   );
