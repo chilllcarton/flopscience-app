@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Copy, RefreshCw, CircleCheck, CircleAlert, Pencil, User, Sparkles, Download, LayoutTemplate, Lightbulb, Cpu, FileText, Image as ImageIcon } from 'lucide-react';
+import { Copy, RefreshCw, CircleCheck, CircleAlert, Pencil, User, Sparkles, Download, LayoutTemplate, Lightbulb, Cpu, FileText, Image as ImageIcon, Filter } from 'lucide-react';
 
 const scheduleData = [
   { id: 1, time: "09:00", topic: "晨間心態 / 金句", prompt: "你是一個擁有10年經驗的德州撲克玩家，帳號是 @FlopScience。請寫一句約20-40字的極短Threads貼文。主題：德州撲克風險管理與人生哲學的結合。要求：金句形式，結尾帶1個emoji，文末加上『—— @FlopScience』。" },
@@ -10,11 +10,13 @@ const scheduleData = [
 ];
 
 const toneOptions = [
-  { value: "專業、冷靜、客觀，帶有邏輯分析", label: "🤵 專業冷靜 (預設)" },
+  { value: "你是 @FlopScience 的主理人。結合數據科學與德州撲克GTO理論，語氣冷靜、專業、帶有矽谷科技人的邏輯感。喜歡用機率、期望值(EV)和決策樹來拆解牌局，打破傳統直覺。結尾習慣總結出一條簡短的『FlopScience 科學撲克定律』。", label: "🟢 品牌專屬 (FlopScience 科學派)" },
+  { value: "專業、冷靜、客觀，帶有邏輯分析", label: "🤵 專業冷靜 (標準)" },
   { value: "極度犀利、具攻擊性、直接點出新手錯誤、帶有挑釁意味", label: "🤬 犀利引戰" },
   { value: "充滿學術名詞、GTO、EV期望值、機率計算的口吻", label: "🎓 學術機率" },
   { value: "充滿幽默感、經常自嘲運氣差或遇到Bad Beat、喜歡用迷因(Meme)梗，語氣輕鬆搞笑", label: "🤡 幽默自嘲 (迷因梗)" },
   { value: "將德州撲克的概念昇華到人生哲學與創業層面。語氣深沉、充滿智慧與洞察力", label: "💼 投資哲學 (人生如牌)" },
+  { value: "地道香港人語氣，大量使用廣東話口語、香港俗語，語氣直接貼地，自然流暢不造作", label: "🇭🇰 港式貼地 (標準廣東話)" },
   { value: "連登討論區巴打語氣，尖酸刻薄、喜歡嘲笑水魚，大量使用潮語（如：CLS、真心膠、炒車、智商稅），充滿黑色幽默", label: "🇭🇰 連登巴打 (毒舌引戰)" },
   { value: "香港中環金融人語氣，說話中英夾雜(Chinglish)，將撲克與投資概念掛鉤(如Hedging, ROI)，帶有高高在上的精英感", label: "🇭🇰 中環金融才俊 (中英夾雜)" },
   { value: "地道草根賭徒語氣。喜歡用傳統麻雀或賭博術語（如：食夾棍、捉路、贏谷輸縮），語氣粗獷豪邁", label: "🇭🇰 街坊老雀 (草根江湖)" },
@@ -22,10 +24,11 @@ const toneOptions = [
 ];
 
 const TABS = [
-  { id: 'schedule', label: '📅 每日排程貼文' },
-  { id: 'custom', label: '💡 自由創作 (IG/Threads)' },
-  { id: 'wordpress', label: '📝 WP 文章 & SEO' },
-  { id: 'youtube', label: '▶️ YouTube 腳本' }
+  { id: 'schedule', label: '📅 排程貼文' },
+  { id: 'custom', label: '💡 自由創作' },
+  { id: 'parser', label: '🃏 牌譜解析' },
+  { id: 'wordpress', label: '📝 Wordpress 文章' },
+  { id: 'youtube', label: '▶️ Youtube 腳本' }
 ];
 
 const App = () => {
@@ -34,6 +37,7 @@ const App = () => {
 
   const [inputs, setInputs] = useState({
     custom: '', yt_topic: '', wp_topic: '',
+    raw_hand: '', clean_hand: '', 
     yt_length: '3-5分鐘 (中等長度，知識科普)',
     image_style: 'Cyberpunk aesthetic, glowing neon emerald green, scientific elements, dark slate background, highly detailed'
   });
@@ -41,10 +45,11 @@ const App = () => {
   const [tones, setTones] = useState({});
   const [results, setResults] = useState({});
   const [selectedTextEngine, setSelectedTextEngine] = useState('gemini'); 
-  const [aiTemperature, setAiTemperature] = useState(0.7); // 新增：溫度 State
+  const [aiTemperature, setAiTemperature] = useState(0.7); 
   
   const [loading, setLoading] = useState({});
   const [ideaLoading, setIdeaLoading] = useState({});
+  const [isParsing, setIsParsing] = useState(false);
   const [errors, setErrors] = useState({});
   const [editing, setEditing] = useState({});
   const [copied, setCopied] = useState({});
@@ -64,7 +69,9 @@ const App = () => {
 
   const getSystemInstruction = () => {
     const tone = tones[currentKey] || toneOptions[0].value;
-    return `你是一個擁有10年經驗的德州撲克職業玩家與媒體營運專家，帳號名稱是 @FlopScience。你的發文語氣必須是：「${tone}」。請確保用繁體中文輸出。`;
+    return `你是一個擁有10年經驗的德州撲克職業玩家與媒體營運專家，帳號名稱是 @FlopScience。你的發文語氣必須是：「${tone}」。請確保用繁體中文輸出。
+    
+⚠️ 核心排版限制：提及任何撲克牌時，請統一使用撲克花色 Emoji 符號 (♠️, ♥️, ♣️, ♦️) 搭配數字/英文，例如：「A♠️」、「K♥️」、「Q♣️」、「J♦️」，讓版面更直觀且具備撲克專業感。`;
   };
 
   const getDeduplicationContext = () => {
@@ -77,7 +84,6 @@ const App = () => {
     const res = await fetch('/api/ai', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      // 傳送設定好的溫度給後端
       body: JSON.stringify({ 
         engine: selectedTextEngine, 
         prompt, 
@@ -91,14 +97,47 @@ const App = () => {
     return data.text;
   };
 
+  const parseHandHistory = async () => {
+    if (!inputs.raw_hand.trim()) {
+      alert("請先貼上原始牌譜 (Raw Data)！");
+      return;
+    }
+    setIsParsing(true);
+    try {
+      const prompt = `請將以下混亂的線上撲克原始牌譜 (Raw Hand History) 提取並翻譯成極度簡潔的繁體中文標準格式。
+格式要求必須包含：
+【盲注級別】(例如 1/2)
+【Hero 位置與手牌】
+【翻牌前 Preflop】(誰 Open, 誰 Call, 誰 3-bet，底池大小)
+【翻牌 Flop】(牌面，行動，底池大小)
+【轉牌 Turn】(牌面，行動，底池大小)
+【河牌 River】(牌面，行動，最終底池與結果)
+
+⚠️ 嚴格翻譯規定：
+1. 過濾掉所有無用的系統ID、發牌時間戳記、以及未入局玩家的棄牌動作。
+2. 所有的手牌與公牌，必須統一轉換為標準撲克花色 Emoji (♠️, ♥️, ♣️, ♦️) 搭配數字或字母，例如：「A♠️」、「K♥️」、「Q♣️」、「J♦️」。
+3. 絕對不要保留英文縮寫 (如 s, h, c, d) 或難以閱讀的數學代碼。
+
+原始牌譜如下：
+${inputs.raw_hand}`;
+      
+      const text = await fetchAIContent(prompt, "你是一個專業的德州撲克牌譜數據清理機器人，只輸出乾淨、帶有 Emoji 花色的純文字牌譜格式。");
+      if (text) handleInputChange('clean_hand', text.trim());
+    } catch (err) {
+      alert("牌譜清理失敗：" + err.message);
+    }
+    setIsParsing(false);
+  };
+
   const generateIdea = async (field) => {
     setIdeaLoading(prev => ({ ...prev, [field]: true }));
     let promptText = "";
     if (field === 'wp_topic') promptText = "幫我想一個適合寫成長篇 SEO 文章的德州撲克主題（例如：資金管理、GTO新手指南）。只輸出『一句話標題』。";
     else if (field === 'custom') promptText = "請給我一個適合在 Threads 或 IG 引起德州撲克玩家激烈討論的爭議性話題或進階心法。只輸出『一句話』，不要引號。";
+    else if (field === 'yt_topic') promptText = "幫我想一個極具吸引力、高點擊率的德州撲克 YouTube 影片主題（例如：破解高額桌心理戰、新手常犯的3個致命錯誤）。只輸出『一句話標題』，不要引號。";
 
     try {
-      const text = await fetchAIContent(promptText, "你是一個德撲社群專家。");
+      const text = await fetchAIContent(promptText, "你是一個德撲社群專家與 YouTube 爆款企劃。");
       if (text) handleInputChange(field, text.trim().replace(/["']/g, ''));
     } catch (err) {
       alert(err.message);
@@ -127,6 +166,22 @@ const App = () => {
       if (!inputs.custom.trim()) return setErrors(prev => ({ ...prev, [key]: "請輸入主題" })), setLoading(prev => ({ ...prev, [key]: false }));
       currentInputData = inputs.custom;
       prompt = platform === 'ig' ? `針對主題「${inputs.custom}」寫一篇IG長文。包含良好排版，以及嚴格限制剛好 5 個 IG 撲克熱門 Hashtags。` : `針對主題「${inputs.custom}」寫一篇 Threads 短文，文末加上 —— @FlopScience`;
+    } else if (activeTab === 'parser') {
+      if (!inputs.clean_hand.trim()) return setErrors(prev => ({ ...prev, [key]: "請先清理或手動輸入乾淨的牌譜！" })), setLoading(prev => ({ ...prev, [key]: false }));
+      currentInputData = "牌譜復盤解析";
+      prompt = platform === 'ig' ? `請根據以下這手牌的過程，寫一篇 Instagram 復盤長文。
+牌譜過程：
+${inputs.clean_hand}
+
+要求：
+1. 點出這手牌最關鍵的決策點
+2. 帶入 GTO 或剝削的思維進行分析
+3. 結尾引導讀者討論「換作是你會怎麼打？」
+4. 包含良好排版，以及嚴格限制剛好 5 個 IG 撲克熱門 Hashtags。` : `請根據以下這手牌的過程，寫一篇 Threads 短文。
+牌譜過程：
+${inputs.clean_hand}
+
+要求：分析關鍵決策點與 GTO 思維，結尾引導討論「換作是你會怎麼打？」，文末加上 —— @FlopScience`;
     } else if (activeTab === 'wordpress') {
       if (!inputs.wp_topic.trim()) return setErrors(prev => ({ ...prev, [key]: "請輸入 WordPress 文章主題" })), setLoading(prev => ({ ...prev, [key]: false }));
       currentInputData = inputs.wp_topic;
@@ -257,7 +312,7 @@ Target AI: Gemini 3.0 / DALL-E 3. 4k resolution, highly detailed, visually strik
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex-shrink-0 min-w-[150px] flex-1 py-4 px-2 text-sm font-bold transition-all border-b-2 flex justify-center items-center gap-2 ${activeTab === tab.id ? 'border-emerald-500 text-emerald-400 bg-slate-900' : 'border-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-900/50'}`}
+                className={`flex-shrink-0 min-w-[120px] md:min-w-[150px] flex-1 py-4 px-2 text-sm font-bold transition-all border-b-2 flex justify-center items-center gap-2 ${activeTab === tab.id ? 'border-emerald-500 text-emerald-400 bg-slate-900' : 'border-transparent text-slate-500 hover:text-slate-300 hover:bg-slate-900/50'}`}
               >
                 {tab.label}
               </button>
@@ -297,6 +352,24 @@ Target AI: Gemini 3.0 / DALL-E 3. 4k resolution, highly detailed, visually strik
                 </div>
               )}
 
+              {activeTab === 'parser' && (
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex justify-between items-center px-1">
+                      <span className="text-xs text-slate-400 font-bold">1. 貼上原始牌譜 (Raw Data)</span>
+                      <button onClick={parseHandHistory} disabled={isParsing} className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors bg-blue-900/30 px-2 py-1 rounded border border-blue-800/50">
+                        {isParsing ? <RefreshCw size={12} className="animate-spin" /> : <Filter size={12} />} AI 自動清理
+                      </button>
+                    </div>
+                    <textarea className="w-full bg-slate-950 border border-slate-700 p-3 rounded-xl min-h-[100px] text-xs focus:border-blue-500 outline-none placeholder-slate-600 font-mono resize-y" placeholder="貼上從 PokerStars, GG Poker 等平台匯出的混亂文字..." value={inputs.raw_hand} onChange={(e) => handleInputChange('raw_hand', e.target.value)} />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <span className="text-xs text-slate-400 font-bold px-1">2. 乾淨牌譜 (可手動修改)</span>
+                    <textarea className="w-full bg-slate-900 border border-emerald-700/50 p-3 rounded-xl min-h-[120px] text-sm focus:border-emerald-500 outline-none text-emerald-100 resize-y" placeholder="AI 清理後的乾淨格式會顯示在這裡..." value={inputs.clean_hand} onChange={(e) => handleInputChange('clean_hand', e.target.value)} />
+                  </div>
+                </div>
+              )}
+
               {activeTab === 'wordpress' && (
                 <div className="flex flex-col gap-2">
                   <div className="flex justify-between items-center px-1">
@@ -314,8 +387,11 @@ Target AI: Gemini 3.0 / DALL-E 3. 4k resolution, highly detailed, visually strik
                   <div className="flex flex-col gap-2">
                     <div className="flex justify-between items-center px-1">
                       <span className="text-xs text-slate-400 font-bold">YouTube 影片主題</span>
+                      <button onClick={() => generateIdea('yt_topic')} disabled={ideaLoading['yt_topic']} className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition-colors">
+                        {ideaLoading['yt_topic'] ? <RefreshCw size={12} className="animate-spin" /> : <Lightbulb size={12} />} AI 幫我想話題
+                      </button>
                     </div>
-                    <textarea className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl min-h-[100px] text-sm focus:border-emerald-500 outline-none" value={inputs.yt_topic} onChange={(e) => handleInputChange('yt_topic', e.target.value)} />
+                    <textarea className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl min-h-[100px] text-sm focus:border-emerald-500 outline-none placeholder-slate-600" placeholder="輸入你想拍的影片主題，或點擊上方讓 AI 幫你發想爆款標題..." value={inputs.yt_topic} onChange={(e) => handleInputChange('yt_topic', e.target.value)} />
                   </div>
                   <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
                     <label className="block text-xs text-slate-400 font-bold mb-2">⏱️ 影片長度預估</label>
@@ -338,7 +414,6 @@ Target AI: Gemini 3.0 / DALL-E 3. 4k resolution, highly detailed, visually strik
                   </select>
                 </div>
                 
-                {/* 溫度拉桿 (Temperature Slider) */}
                 <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
                   <label className="block text-xs text-slate-500 font-bold mb-2 uppercase flex justify-between">
                     <span>🌡️ AI 創意溫度 (Temperature)</span>
@@ -361,7 +436,7 @@ Target AI: Gemini 3.0 / DALL-E 3. 4k resolution, highly detailed, visually strik
                 </div>
 
                 <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                  <label className="block text-xs text-slate-500 font-bold mb-2 uppercase">選擇語氣風格 (Tone)</label>
+                  <label className="block text-xs text-slate-500 font-bold mb-2 uppercase">選擇文字語氣風格 (Tone)</label>
                   <select className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-lg text-sm py-2 px-2 outline-none focus:border-emerald-500" value={tones[currentKey] || toneOptions[0].value} onChange={(e) => handleToneChange(e.target.value)}>
                     {toneOptions.map(o => <option key={o.label} value={o.value}>{o.label}</option>)}
                   </select>
@@ -371,20 +446,25 @@ Target AI: Gemini 3.0 / DALL-E 3. 4k resolution, highly detailed, visually strik
                   <label className="block text-xs text-slate-500 font-bold mb-2 uppercase">配圖視覺風格 (供生圖 Prompt 用)</label>
                   <select className="w-full bg-slate-900 border border-slate-700 text-slate-200 rounded-lg text-sm py-2 px-2 outline-none focus:border-emerald-500" value={inputs.image_style} onChange={(e) => handleInputChange('image_style', e.target.value)}>
                     <option value="Cyberpunk aesthetic, glowing neon emerald green, scientific elements, dark slate background, highly detailed">🟢 品牌專屬 (科幻霓虹綠)</option>
+                    <option value="Photorealistic macro photography, close-up of stacks of professional casino poker chips and vintage distressed playing cards on a classic green felt table. Dramatic moody studio lighting, sharp focus on foreground, shallow depth of field, cinematic blurred background bokeh, 8k resolution, highly detailed">📸 寫實微距 (復古紙牌與籌碼)</option>
                     <option value="Cinematic photography, dark moody classic casino atmosphere, professional lighting, photorealistic">♠️ 經典實體賭場 (暗沉電影)</option>
                     <option value="Minimalist 3D render, clean, bright, focused on data, statistics, and poker elements">📊 極簡 3D 渲染 (明亮數據)</option>
+                    <option value="Ultra-luxury high roller casino room, black and gold color palette, shiny metallic chips, expensive lifestyle, VIP room, opulent atmosphere, photorealistic, 8k">💎 頂級奢華 (黑金高額桌)</option>
+                    <option value="Japanese anime style, high stakes poker battle, dramatic perspective, dynamic lighting, intense atmosphere, vibrant colors, masterpiece, cel-shaded">🎨 動漫熱血 (日系激戰)</option>
+                    <option value="Modern flat vector illustration, clean lines, minimalist poker and data elements, corporate tech style, solid color background, UI/UX aesthetic">🖌️ 現代向量 (扁平插畫)</option>
+                    <option value="Surrealism, abstract representation of psychology, floating poker cards, dreamlike atmosphere, mind games, tilt, artistic interpretation, high aesthetic">🌀 心理超现实 (心態意境)</option>
                   </select>
                 </div>
               </div>
 
               <div className="flex flex-col gap-3 mt-auto pt-4">
-                {['schedule', 'custom'].includes(activeTab) ? (
+                {['schedule', 'custom', 'parser'].includes(activeTab) ? (
                   <>
                     <button onClick={() => generateText('threads')} disabled={loading[currentKey]} className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl flex justify-center items-center gap-2 shadow-lg active:scale-95 transition-all">
                       {loading[currentKey] === 'threads' ? <RefreshCw className="animate-spin" size={18}/> : <Sparkles size={18}/>} 生成 Threads 短文
                     </button>
                     <button onClick={() => generateText('ig')} disabled={loading[currentKey]} className="w-full py-3 bg-gradient-to-r from-pink-600 to-purple-600 hover:opacity-90 text-white font-bold rounded-xl flex justify-center items-center gap-2 shadow-lg active:scale-95 transition-all">
-                      {loading[currentKey] === 'ig' ? <RefreshCw className="animate-spin" size={18}/> : <span>IG</span>} 擴充 IG 長文 (嚴格 5 個 Hashtag)
+                      {loading[currentKey] === 'ig' ? <RefreshCw className="animate-spin" size={18}/> : <span>IG</span>} 生成 IG 長文 (附 Hashtag)
                     </button>
                   </>
                 ) : (
@@ -446,7 +526,6 @@ Target AI: Gemini 3.0 / DALL-E 3. 4k resolution, highly detailed, visually strik
                 )}
               </div>
 
-              {/* 顯示配圖 Prompt 區塊 */}
               {(imageLoading[currentKey] || imagePrompts[currentKey] || imageErrors[currentKey]) && (
                 <div className="mt-4 bg-slate-950 border border-slate-800 rounded-xl p-4 flex flex-col justify-center relative min-h-[100px] animate-fade-in">
                   {imageLoading[currentKey] ? (
