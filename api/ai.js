@@ -35,12 +35,12 @@ export default async function handler(req, res) {
     let finalPrompt = prompt;
     if (redis) {
       try {
-        // 讀取最近 5 篇文章紀錄
-        const recentPosts = await redis.lrange('flopscience:posts', 0, 4);
+        // 提取最近 100 篇歷史紀錄去教 AI 防撞橋 (0 到 99 即係 100 篇)
+        const recentPosts = await redis.lrange('carton_ai_engine:posts', 0, 99);
         if (recentPosts && recentPosts.length > 0) {
-          const historyText = recentPosts.map((post, i) => `舊文 ${i + 1} 摘要：${post.substring(0, 100)}...`).join('\n');
-          // 強制注入防撞橋指令
-          finalPrompt += `\n\n【⚠️ 極度重要：防重複機制】請先檢查以下我們最近已生成的貼文摘要：\n${historyText}\n\n👉 這次產出的全新內容，其「主題切入點」及「核心用詞」絕對不可以與上述舊文重複！請給我一個完全不同的新角度！`;
+          // 將摘要進一步縮短到 50 字，避免 Prompt 變得過度臃腫
+          const historyText = recentPosts.map((post, i) => `舊文 ${i + 1}：${post.substring(0, 50)}...`).join('\n');
+          finalPrompt += `\n\n【⚠️ 極度重要：防重複機制】請先檢查以下我們最近已生成的 ${recentPosts.length} 篇內容摘要：\n${historyText}\n\n👉 這次產出的全新內容，其「主題切入點」及「核心用詞」絕對不可以與上述舊文重複！請給我一個完全不同的新角度！`;
         }
       } catch (error) {
         console.error("Redis 讀取失敗:", error);
@@ -86,11 +86,12 @@ export default async function handler(req, res) {
       generatedText = data.choices?.[0]?.message?.content;
     }
 
-    // 💾 將新生成的內容寫入雲端數據庫 (只保留最近 20 篇以節省空間)
+    // 💾 將新生成的內容寫入雲端數據庫 (擴充儲存最近 200 篇)
     if (redis && generatedText) {
       try {
-        await redis.lpush('flopscience:posts', generatedText);
-        await redis.ltrim('flopscience:posts', 0, 19);
+        await redis.lpush('carton_ai_engine:posts', generatedText);
+        // 0, 199 代表保留最新的 200 篇文章
+        await redis.ltrim('carton_ai_engine:posts', 0, 199);
       } catch (error) {
         console.error("Redis 寫入失敗:", error);
       }
